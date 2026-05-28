@@ -12,6 +12,21 @@ import {
   DEFAULT_THEME,
 } from '../config/constants';
 
+const TAB_SIZE_VALUES = [2, 4];
+const RULER_VALUES = [80, 120];
+const AUTOSAVE_INTERVAL_VALUES = [0, 5000, 10000];
+
+function getStoredNumber(key, fallback, validValues) {
+  const raw = Number(localStorage.getItem(key));
+  return validValues.includes(raw) ? raw : fallback;
+}
+
+function getStoredBoolean(key, fallback) {
+  const raw = localStorage.getItem(key);
+  if (raw === null) return fallback;
+  return raw === 'true';
+}
+
 /**
  * useEditor
  * Manages local editor state:
@@ -27,6 +42,18 @@ export function useEditor({ user, onNeedAuth }) {
     () => localStorage.getItem('debugra-editor-font') ?? DEFAULT_EDITOR_FONT
   );
   const [theme, setTheme] = useState(() => localStorage.getItem('debugra-theme') ?? DEFAULT_THEME);
+  const [tabSize, setTabSizeState] = useState(() =>
+    getStoredNumber('debugra-tab-size', 4, TAB_SIZE_VALUES)
+  );
+  const [minimapEnabled, setMinimapEnabledState] = useState(() =>
+    getStoredBoolean('debugra-minimap-enabled', true)
+  );
+  const [rulerColumn, setRulerColumnState] = useState(() =>
+    getStoredNumber('debugra-ruler-column', 80, RULER_VALUES)
+  );
+  const [autosaveInterval, setAutosaveIntervalState] = useState(() =>
+    getStoredNumber('debugra-autosave-interval', 0, AUTOSAVE_INTERVAL_VALUES)
+  );
   const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
   const [stdinValue, setStdinValue] = useState('');
   const [stdinOpen, setStdinOpen] = useState(false);
@@ -49,10 +76,44 @@ export function useEditor({ user, onNeedAuth }) {
     localStorage.setItem('debugra-editor-font', fontFamily);
   }, [fontFamily]);
 
+  useEffect(() => {
+    localStorage.setItem('debugra-tab-size', String(tabSize));
+  }, [tabSize]);
+
+  useEffect(() => {
+    localStorage.setItem('debugra-minimap-enabled', String(minimapEnabled));
+  }, [minimapEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem('debugra-ruler-column', String(rulerColumn));
+  }, [rulerColumn]);
+
+  useEffect(() => {
+    localStorage.setItem('debugra-autosave-interval', String(autosaveInterval));
+  }, [autosaveInterval]);
+
+  useEffect(() => {
+    if (!autosaveInterval) return undefined;
+
+    const timer = window.setInterval(() => {
+      localStorage.setItem(
+        'debugra-editor-draft',
+        JSON.stringify({
+          language,
+          code,
+          stdinValue,
+          savedAt: Date.now(),
+        })
+      );
+    }, autosaveInterval);
+
+    return () => window.clearInterval(timer);
+  }, [autosaveInterval, language, code, stdinValue]);
+
   // Auto-open stdin panel when input-reading functions are detected
   useEffect(() => {
     if (needsInput && !stdinOpen) setStdinOpen(true);
-  }, [needsInput]);
+  }, [needsInput, stdinOpen]);
 
   const changeLanguage = useCallback((newLang) => {
     setLanguage(newLang);
@@ -61,6 +122,22 @@ export function useEditor({ user, onNeedAuth }) {
 
   const increaseFontSize = useCallback(() => setFontSize((f) => Math.min(f + 1, 28)), []);
   const decreaseFontSize = useCallback(() => setFontSize((f) => Math.max(f - 1, 10)), []);
+  const setTabSize = useCallback(
+    (value) => setTabSizeState(TAB_SIZE_VALUES.includes(Number(value)) ? Number(value) : 4),
+    []
+  );
+  const setMinimapEnabled = useCallback((value) => setMinimapEnabledState(Boolean(value)), []);
+  const setRulerColumn = useCallback(
+    (value) => setRulerColumnState(RULER_VALUES.includes(Number(value)) ? Number(value) : 80),
+    []
+  );
+  const setAutosaveInterval = useCallback(
+    (value) =>
+      setAutosaveIntervalState(
+        AUTOSAVE_INTERVAL_VALUES.includes(Number(value)) ? Number(value) : 0
+      ),
+    []
+  );
 
   const downloadCode = useCallback(() => {
     const filename = LANG_FILE_NAMES[language] || 'code.txt';
@@ -114,6 +191,14 @@ export function useEditor({ user, onNeedAuth }) {
     setFontFamily,
     theme,
     setTheme,
+    tabSize,
+    setTabSize,
+    minimapEnabled,
+    setMinimapEnabled,
+    rulerColumn,
+    setRulerColumn,
+    autosaveInterval,
+    setAutosaveInterval,
     cursorPos,
     setCursorPos,
     stdinValue,

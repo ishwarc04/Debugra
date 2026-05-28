@@ -81,23 +81,22 @@ export default function EditorPage({ user }) {
 
   // ─── Editor Logic ──────────────────────────────────────────────────────────
   const handleCopyOutput = async () => {
-  if (!execution.stdout) return;
+    if (!execution.stdout) return;
 
-      try {
-        await navigator.clipboard.writeText(execution.stdout);
+    try {
+      await navigator.clipboard.writeText(execution.stdout);
 
-        setCopied(true);
+      setCopied(true);
 
-        toast.success('Output copied!');
+      toast.success('Output copied!');
 
-        setTimeout(() => {
-          setCopied(false);
-        }, 2000);
-
-      } catch (err) {
-        toast.error('Failed to copy output');
-      }
-    };
+      setTimeout(() => {
+        setCopied(false);
+      }, 2000);
+    } catch (err) {
+      toast.error('Failed to copy output');
+    }
+  };
 
   const editor = useEditor({
     user,
@@ -258,6 +257,7 @@ export default function EditorPage({ user }) {
 
   const handleEditorMount = (editorInstance) => {
     editorRef.current = editorInstance;
+    window.__DEBUGRA_EDITOR__ = editorInstance;
     editorInstance.onDidChangeCursorPosition((e) => {
       editor.setCursorPos({ line: e.position.lineNumber, col: e.position.column });
     });
@@ -266,6 +266,36 @@ export default function EditorPage({ user }) {
       if (executionRunRef.current) executionRunRef.current();
     });
   };
+
+  useEffect(
+    () => () => {
+      if (window.__DEBUGRA_EDITOR__ === editorRef.current) {
+        window.__DEBUGRA_EDITOR__ = null;
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (!editorRef.current) return;
+
+    editorRef.current.updateOptions({
+      minimap: {
+        enabled: editor.minimapEnabled,
+        side: minimapSide,
+        showSlider: 'always',
+        renderCharacters: false,
+      },
+      rulers: [{ column: editor.rulerColumn }],
+      insertSpaces: true,
+      tabSize: editor.tabSize,
+    });
+
+    const model = editorRef.current.getModel();
+    if (model) {
+      model.updateOptions({ tabSize: editor.tabSize, insertSpaces: true });
+    }
+  }, [editor.tabSize, editor.minimapEnabled, editor.rulerColumn, minimapSide]);
 
   // ─── Output Pane Resize ───────────────────────────────────────────────────
   const handleResizeStart = (e) => {
@@ -290,7 +320,14 @@ export default function EditorPage({ user }) {
   const editorFileName = LANG_FILE_NAMES[editor.language] || 'main.txt';
 
   return (
-    <div style={{ height: '100dvh', display: 'flex', flexDirection: 'column', '--blur-intensity': `${blurIntensity}px` }}>
+    <div
+      style={{
+        height: '100dvh',
+        display: 'flex',
+        flexDirection: 'column',
+        '--blur-intensity': `${blurIntensity}px`,
+      }}
+    >
       {/* ===== TOP BAR ===== */}
       <div className="topbar px-2 px-md-3">
         <div className="topbar-left d-flex align-items-center">
@@ -719,111 +756,6 @@ export default function EditorPage({ user }) {
               >
                 <Settings size={14} />
               </button>
-              {showSettings && (
-                <div className="audio-settings-popover custom-layout-popover" role="dialog" aria-label="Settings">
-                  <div className="audio-settings-head">
-                    <span>Settings</span>
-                    <button
-                      className="history-action-btn"
-                      aria-label="Close Settings"
-                      onClick={() => setShowSettings(false)}
-                    >
-                      <i className="bi bi-x" />
-                    </button>
-                  </div>
-                  <div className="audio-settings-row">
-                    <div className="audio-settings-label">
-                      <i className="bi bi-type" style={{ fontSize: '14px' }} />
-                      <span>Editor font</span>
-                    </div>
-                    <select
-                      className="lang-select"
-                      value={editor.fontFamily}
-                      onChange={(e) => editor.setFontFamily(e.target.value)}
-                      aria-label="Editor font"
-                      style={{ fontSize: '0.7rem', padding: '2px 6px' }}
-                    >
-                      {EDITOR_FONTS.map((font) => (
-                        <option key={font.id} value={font.id}>
-                          {font.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="audio-settings-row">
-                    <div className="audio-settings-label">
-                      <i className="bi bi-palette" style={{ fontSize: '14px' }} />
-                      <span>Theme</span>
-                    </div>
-                    <select
-                      className="lang-select"
-                      value={editor.theme}
-                      onChange={(e) => editor.setTheme(e.target.value)}
-                      aria-label="Editor theme"
-                      style={{ fontSize: '0.7rem', padding: '2px 6px' }}
-                    >
-                      {EDITOR_THEMES.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  {/* ===== WALLPAPER BLUR SETTING ROW ===== */}
-                  <div className="audio-settings-row" style={{ marginTop: '12px' }}>
-                    <div className="audio-settings-label">
-                      <i className="bi bi-sliders" style={{ fontSize: '14px' }} />
-                      <span>Wallpaper Blur</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
-                      <input
-                        type="range"
-                        min="0"
-                        max="30"
-                        step="1"
-                        value={blurIntensity}
-                        onChange={(e) => setBlurIntensity(Number(e.target.value))}
-                        style={{ flex: 1, accentColor: '#00bcd4' }} 
-                      />
-                      <span style={{ fontSize: '12px', minWidth: '30px', textAlign: 'right' }}>
-                        {blurIntensity}px
-                      </span>
-                    </div>
-                  </div>
-                  <div className="audio-settings-row">
-                    <div className="audio-settings-label">
-                      {audioFeedback.muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
-                      <span>Audio feedback</span>
-                    </div>
-                    <button
-                      className={`audio-toggle ${audioFeedback.muted ? '' : 'active'}`}
-                      aria-pressed={!audioFeedback.muted}
-                      onClick={() => audioFeedback.setMuted(!audioFeedback.muted)}
-                    >
-                      {audioFeedback.muted ? 'Muted' : 'On'}
-                    </button>
-                  </div>
-                  <label className="audio-settings-slider">
-                    <span>Volume</span>
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.05"
-                      value={audioFeedback.volume}
-                      onChange={(e) => audioFeedback.setVolume(e.target.value)}
-                    />
-                    <span>{Math.round(audioFeedback.volume * 100)}%</span>
-                  </label>
-                  <button
-                    className="audio-test-btn"
-                    onClick={audioFeedback.testSound}
-                    disabled={audioFeedback.muted}
-                  >
-                    Test chime
-                  </button>
-                </div>
-              )}
             </div>
           </div>
           <span className="kbd-hint d-none d-lg-inline">Ctrl+Enter</span>
@@ -922,7 +854,7 @@ export default function EditorPage({ user }) {
                 fontSize: editor.fontSize,
                 fontFamily: getEditorFontFamily(editor.fontFamily),
                 minimap: {
-                  enabled: showMinimap, // ✅ CHANGE 3: Use showMinimap state instead of hardcoded true
+                  enabled: showMinimap && editor.minimapEnabled,
                   side: minimapSide,
                   showSlider: 'always',
                   renderCharacters: false,
@@ -932,7 +864,9 @@ export default function EditorPage({ user }) {
                 lineNumbers: 'on',
                 renderLineHighlight: room.isReadOnly ? 'none' : 'line',
                 automaticLayout: true,
-                tabSize: 4,
+                tabSize: editor.tabSize,
+                rulers: [{ column: editor.rulerColumn }],
+                insertSpaces: true,
                 wordWrap: 'on',
                 smoothScrolling: true,
                 cursorBlinking: room.isReadOnly ? 'solid' : 'smooth',
@@ -1030,7 +964,7 @@ export default function EditorPage({ user }) {
         >
           <div className="output-tabs">
             {/* copy */}
-             <div
+            <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -1062,7 +996,7 @@ export default function EditorPage({ user }) {
                   {copied ? '✓' : '📋'}
                 </button>
               )}
-             </div>
+            </div>
             {execution.stderr && (
               <button
                 className={`output-tab ${execution.activeOutputTab === OUTPUT_TABS.STDERR ? 'active' : ''}`}
@@ -1181,6 +1115,7 @@ export default function EditorPage({ user }) {
         execStatus={execution.execStatus}
         langName={langConfig.name}
         cursorPos={editor.cursorPos}
+        tabSize={editor.tabSize}
         room={room}
         user={user}
       />
@@ -1278,28 +1213,206 @@ export default function EditorPage({ user }) {
           onStatusChange={() => setApiKeyStatus(getApiKeyStatus())}
         />
       )}
-{showAccount && user && (
-  <AccountSettings
-    onClose={() => setShowAccount(false)}
-    user={user}
-  />
-)}
+      {showAccount && user && <AccountSettings onClose={() => setShowAccount(false)} user={user} />}
 
-{/* Video Call Overlay */}
-{showVideoCall && room.roomId && (
-  <VideoCall
-    roomId={room.roomId}
-    userName={
-      user?.displayName ||
-      user?.email?.split('@')[0] ||
-      'Guest'
-    }
-    onClose={() => setShowVideoCall(false)}
-  />
-)}
+      {showSettings && (
+        <div className="settings-modal-backdrop" onClick={() => setShowSettings(false)}>
+          <div
+            className="settings-modal"
+            role="dialog"
+            aria-label="Settings"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="audio-settings-head">
+              <span>Editor Settings</span>
+              <button
+                className="history-action-btn"
+                aria-label="Close Settings"
+                onClick={() => setShowSettings(false)}
+              >
+                <i className="bi bi-x" />
+              </button>
+            </div>
 
-{/* Real-time Democratic Vote Popup */}
-<VotePopup room={room} user={user} />
+            <div className="audio-settings-row">
+              <div className="audio-settings-label">
+                <i className="bi bi-type" style={{ fontSize: '14px' }} />
+                <span>Editor font</span>
+              </div>
+              <select
+                className="lang-select"
+                value={editor.fontFamily}
+                onChange={(e) => editor.setFontFamily(e.target.value)}
+                aria-label="Editor font"
+                style={{ fontSize: '0.7rem', padding: '2px 6px' }}
+              >
+                {EDITOR_FONTS.map((font) => (
+                  <option key={font.id} value={font.id}>
+                    {font.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="audio-settings-row">
+              <div className="audio-settings-label">
+                <i className="bi bi-palette" style={{ fontSize: '14px' }} />
+                <span>Theme</span>
+              </div>
+              <select
+                className="lang-select"
+                value={editor.theme}
+                onChange={(e) => editor.setTheme(e.target.value)}
+                aria-label="Editor theme"
+                style={{ fontSize: '0.7rem', padding: '2px 6px' }}
+              >
+                {EDITOR_THEMES.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="audio-settings-row" style={{ marginTop: '12px' }}>
+              <div className="audio-settings-label">
+                <i className="bi bi-sliders" style={{ fontSize: '14px' }} />
+                <span>Wallpaper Blur</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
+                <input
+                  type="range"
+                  min="0"
+                  max="30"
+                  step="1"
+                  value={blurIntensity}
+                  onChange={(e) => setBlurIntensity(Number(e.target.value))}
+                  style={{ flex: 1, accentColor: '#00bcd4' }}
+                />
+                <span style={{ fontSize: '12px', minWidth: '30px', textAlign: 'right' }}>
+                  {blurIntensity}px
+                </span>
+              </div>
+            </div>
+
+            <div className="audio-settings-row">
+              <div className="audio-settings-label">
+                <i className="bi bi-braces" style={{ fontSize: '14px' }} />
+                <span>Tab size</span>
+              </div>
+              <select
+                className="lang-select"
+                aria-label="Tab size"
+                value={String(editor.tabSize)}
+                onChange={(e) => editor.setTabSize(Number(e.target.value))}
+                style={{ fontSize: '0.7rem', padding: '2px 6px' }}
+              >
+                <option value="2">2 spaces</option>
+                <option value="4">4 spaces</option>
+              </select>
+            </div>
+
+            <div className="audio-settings-row">
+              <div className="audio-settings-label">
+                <i className="bi bi-layout-sidebar" style={{ fontSize: '14px' }} />
+                <span>Minimap</span>
+              </div>
+              <select
+                className="lang-select"
+                aria-label="Minimap"
+                value={editor.minimapEnabled ? 'enabled' : 'disabled'}
+                onChange={(e) => editor.setMinimapEnabled(e.target.value === 'enabled')}
+                style={{ fontSize: '0.7rem', padding: '2px 6px' }}
+              >
+                <option value="enabled">Enabled</option>
+                <option value="disabled">Disabled</option>
+              </select>
+            </div>
+
+            <div className="audio-settings-row">
+              <div className="audio-settings-label">
+                <i className="bi bi-rulers" style={{ fontSize: '14px' }} />
+                <span>Vertical ruler</span>
+              </div>
+              <select
+                className="lang-select"
+                aria-label="Vertical ruler"
+                value={String(editor.rulerColumn)}
+                onChange={(e) => editor.setRulerColumn(Number(e.target.value))}
+                style={{ fontSize: '0.7rem', padding: '2px 6px' }}
+              >
+                <option value="80">80 chars</option>
+                <option value="120">120 chars</option>
+              </select>
+            </div>
+
+            <div className="audio-settings-row">
+              <div className="audio-settings-label">
+                <i className="bi bi-clock" style={{ fontSize: '14px' }} />
+                <span>Autosave interval</span>
+              </div>
+              <select
+                className="lang-select"
+                aria-label="Autosave interval"
+                value={String(editor.autosaveInterval)}
+                onChange={(e) => editor.setAutosaveInterval(Number(e.target.value))}
+                style={{ fontSize: '0.7rem', padding: '2px 6px' }}
+              >
+                <option value="0">Off</option>
+                <option value="5000">5s</option>
+                <option value="10000">10s</option>
+              </select>
+            </div>
+
+            <div className="audio-settings-row">
+              <div className="audio-settings-label">
+                {audioFeedback.muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+                <span>Audio feedback</span>
+              </div>
+              <button
+                className={`audio-toggle ${audioFeedback.muted ? '' : 'active'}`}
+                aria-pressed={!audioFeedback.muted}
+                onClick={() => audioFeedback.setMuted(!audioFeedback.muted)}
+              >
+                {audioFeedback.muted ? 'Muted' : 'On'}
+              </button>
+            </div>
+
+            <label className="audio-settings-slider">
+              <span>Volume</span>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={audioFeedback.volume}
+                onChange={(e) => audioFeedback.setVolume(e.target.value)}
+              />
+              <span>{Math.round(audioFeedback.volume * 100)}%</span>
+            </label>
+
+            <button
+              className="audio-test-btn"
+              onClick={audioFeedback.testSound}
+              disabled={audioFeedback.muted}
+            >
+              Test chime
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Video Call Overlay */}
+      {showVideoCall && room.roomId && (
+        <VideoCall
+          roomId={room.roomId}
+          userName={user?.displayName || user?.email?.split('@')[0] || 'Guest'}
+          onClose={() => setShowVideoCall(false)}
+        />
+      )}
+
+      {/* Real-time Democratic Vote Popup */}
+      <VotePopup room={room} user={user} />
     </div>
   );
 }
